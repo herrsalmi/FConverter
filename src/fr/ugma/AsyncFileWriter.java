@@ -9,7 +9,7 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Created by Ayyoub on 15/06/2016.
  */
-class AsyncFileWriter implements Runnable, IFileWriter {
+class AsyncFileWriter implements Runnable, IFileWriter, AutoCloseable {
     private final Writer out;
     private final BlockingQueue<Item> queue = new LinkedBlockingQueue<>(10000000);
     private volatile boolean started = false;
@@ -22,7 +22,6 @@ class AsyncFileWriter implements Runnable, IFileWriter {
         } else {
             this.out = new BufferedWriter(new java.io.FileWriter(file));
         }
-
     }
 
     public void append(CharSequence seq) {
@@ -31,7 +30,8 @@ class AsyncFileWriter implements Runnable, IFileWriter {
         }
         try {
             queue.put(new CharSeqItem(seq));
-        } catch (InterruptedException ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -57,7 +57,7 @@ class AsyncFileWriter implements Runnable, IFileWriter {
                     }
                 }
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                Thread.currentThread().interrupt();
             }
         }
         try {

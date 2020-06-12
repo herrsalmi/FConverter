@@ -20,12 +20,12 @@ class VCFHandler extends RecursiveAction {
     private static final int MAXSIZE = 100;
     private static int count = 0;
     private static int initialSize = 0;
-    private HashMap<String, ArrayList<String>> hashGenotype = new HashMap<>(100);
-    private AsyncFileWriter writer;
+    private final HashMap<String, ArrayList<String>> hashGenotype = new HashMap<>(100);
+    private final AsyncFileWriter writer;
     private int size;
     private int offset;
-    private String path;
-    private String chip;
+    private final String path;
+    private final String chip;
 
     VCFHandler(int size, int offset, AsyncFileWriter writer, String path, String chip) {
         this.size = size;
@@ -40,7 +40,6 @@ class VCFHandler extends RecursiveAction {
     @Override
     protected void compute() {
         if (this.size > MAXSIZE) {
-            //System.out.println("Splitting size: " + this.size + " [Offset] " + this.offset);
             List<VCFHandler> subtasks = new ArrayList<>(createSubtasks());
             for (RecursiveAction subtask : subtasks) {
                 subtask.fork();
@@ -51,7 +50,7 @@ class VCFHandler extends RecursiveAction {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
-                    e.printStackTrace();
+                    Thread.currentThread().interrupt();
                 }
             }
             incrementCount();
@@ -64,9 +63,8 @@ class VCFHandler extends RecursiveAction {
             System.out.println("ERROR! : file <" + path + "> does not exist");
             System.exit(2);
         }
-        try {
-            GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-            BufferedReader br = new BufferedReader(new InputStreamReader(gzip));
+        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
+             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
             String line;
             String[] data;
             ArrayList<String> indiv = new ArrayList<>(100);
@@ -93,8 +91,6 @@ class VCFHandler extends RecursiveAction {
                     hashGenotype.get(indiv.get(i - offset)).add(data[i]);
                 }
             }
-            br.close();
-            gzip.close();
 
             StringBuilder sb = new StringBuilder();
 

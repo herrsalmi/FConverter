@@ -6,13 +6,13 @@ import java.util.Objects;
 /**
  * Created by Ayyoub on 12/05/2016.
  */
-class Positions implements Comparable {
+class Positions implements Comparable<Positions> {
     private static int CMP = 0;
     private static int CHIP = 1;
 
-    private long pos;
-    private String rsID;
-    private ArrayList<Integer> chipPos = new ArrayList<>();
+    private final long pos;
+    private final String rsID;
+    private final ArrayList<Integer> chipPos = new ArrayList<>();
 
     Positions(long pos, String rsID) {
         this.rsID = rsID;
@@ -73,14 +73,13 @@ class Positions implements Comparable {
     }
 
     @Override
-    public int compareTo(Object o) {
+    public int compareTo(Positions o) {
         if (o == null)
             throw new NullPointerException();
-        Positions that = (Positions) o;
-        if (this.pos == that.pos) {
-            that.setChipNPos(CMP);
+        if (this.pos == o.pos) {
+            o.setChipNPos(CMP);
             return 0;
-        } else if (pos > that.pos)
+        } else if (pos > o.pos)
             return 1;
         else
             return -1;

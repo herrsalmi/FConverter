@@ -16,15 +16,15 @@ public class FConverter {
     private static final String VERSION = "0.9";
     private static final boolean DEBUG = true;
     private static final boolean LARGMEM = false;
-    private static boolean header = false;
+    private boolean header = false;
     private mode tMode;
-    private HashMap<String, String> params = new HashMap<>();
-    private HashMap<String, ArrayList<String>> hashGenotype = new HashMap<>(100);
-    private HashMap<String, Integer> hashIndiv = new HashMap<>(100);
-    private LinkedHashMap<String, SortedSet<Positions>> positionSet = new LinkedHashMap<>();
+    private final HashMap<String, String> params = new HashMap<>();
+    private final HashMap<String, ArrayList<String>> hashGenotype = new HashMap<>(100);
+    private final HashMap<String, Integer> hashIndiv = new HashMap<>(100);
+    private final LinkedHashMap<String, SortedSet<Positions>> positionSet = new LinkedHashMap<>();
     private ArrayList<String> imputationRes = new ArrayList<>(100);
-    private ArrayList<StringBuilder> buffer = new ArrayList<>();
-    private LinkedHashMap<String, LinkedHashMap<String, String[]>> hashAlleles = new LinkedHashMap<>(100);
+    private final ArrayList<StringBuilder> buffer = new ArrayList<>();
+    private final LinkedHashMap<String, LinkedHashMap<String, String[]>> hashAlleles = new LinkedHashMap<>(100);
     private int cmp = 0;
     private char[] geno;
 
@@ -38,6 +38,7 @@ public class FConverter {
     }
 
     private void parseArguments(String[] args) {
+        String errorMsg = "ERROR! : incorrect number of arguments !";
         if (args.length == 0) {
             printHelp();
             System.exit(0);
@@ -56,7 +57,7 @@ public class FConverter {
                 break;
             case "vcf2fimpute":
                 if (args.length != 6 && args.length != 5 && args.length != 4 && args.length != 3) {
-                    System.out.println("ERROR! : incorrect number of arguments !");
+                    System.out.println(errorMsg);
                     System.exit(1);
                 }
                 for (int i = 1; i < args.length; i++) {
@@ -69,7 +70,7 @@ public class FConverter {
                 break;
             case "snpID":
                 if (args.length != 3 && args.length != 2) {
-                    System.out.println("ERROR! : incorrect number of arguments !");
+                    System.out.println(errorMsg);
                     System.exit(1);
                 }
                 for (int i = 1; i < args.length; i++) {
@@ -79,7 +80,7 @@ public class FConverter {
                 break;
             case "fimpute2vcf":
                 if (args.length != 6) {
-                    System.out.println("ERROR! : incorrect number of arguments !");
+                    System.out.println(errorMsg);
                     System.exit(1);
                 }
                 for (int i = 1; i < args.length; i++) {
@@ -151,7 +152,7 @@ public class FConverter {
                         }
                         writer.close();
                     } catch (IOException | InterruptedException e) {
-                        e.printStackTrace();
+                        Thread.currentThread().interrupt();
                     }
                     System.out.println("\nDone!");
                     break;
@@ -186,9 +187,8 @@ public class FConverter {
     }
 
     private int getColumnNunber(String path) {
-        try {
-            GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-            BufferedReader br = new BufferedReader(new InputStreamReader(gzip));
+        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
+             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.startsWith("##"))
@@ -209,9 +209,8 @@ public class FConverter {
             System.out.println("ERROR! : file <" + path + "> does not exist");
             System.exit(2);
         }
-        try {
-            GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-            BufferedReader br = new BufferedReader(new InputStreamReader(gzip));
+        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
+             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
             String line;
             String[] data;
             double lastPos = 0;
@@ -232,13 +231,11 @@ public class FConverter {
                 data = line.split("\t");
                 if (lastPos == Long.parseLong(data[1]))
                     continue;
-                for (String key : hashIndiv.keySet()) {
-                    hashGenotype.get(key).add(data[hashIndiv.get(key)]);
+                for (var entry : hashIndiv.entrySet()) {
+                    hashGenotype.get(entry.getKey()).add(data[entry.getValue()]);
                 }
                 lastPos = Long.parseLong(data[1]);
             }
-            br.close();
-            gzip.close();
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -267,9 +264,8 @@ public class FConverter {
         }
         String line;
         String[] data;
-        try {
-            GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-            BufferedReader br = new BufferedReader(new InputStreamReader(gzip));
+        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
+             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
             while ((line = br.readLine()) != null) {
                 if (line.startsWith("##"))
                     continue;
@@ -335,10 +331,9 @@ public class FConverter {
             System.out.println("ERROR! : file <" + p + "> does not exist");
             System.exit(2);
         });
-        try {
-            for (String p : paths) {
-                GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
-                BufferedReader br = new BufferedReader(new InputStreamReader(gzip));
+        for (String p : paths) {
+            try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
+                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
                 String line;
                 String[] data;
                 long lastPos = 0;
@@ -358,9 +353,12 @@ public class FConverter {
                 }
                 Positions.incrementChipNumber();
                 Positions.resetCMP();
+            } catch (IOException | NumberFormatException e) {
+                e.printStackTrace();
             }
+        }
 
-            BufferedWriter bw = new BufferedWriter(new FileWriter("snp_info.txt"));
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("snp_info.txt"))){
             StringBuilder sb = new StringBuilder();
             bw.write("SNP_ID\tChr\tPos\tChip1");
             for (int i = 1; i < paths.size(); i++) {
@@ -382,8 +380,6 @@ public class FConverter {
                     e1.printStackTrace();
                 }
             }));
-
-            bw.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -405,39 +401,39 @@ public class FConverter {
                 System.exit(2);
             }
         }
-        try {
-            String line;
-            String[] data;
-            BufferedReader br;
 
-            br = new BufferedReader(new FileReader(snpInfo));
+        try (BufferedReader br = new BufferedReader(new FileReader(snpInfo));){
+            String line;
             br.readLine();
             while ((line = br.readLine()) != null) {
+                String[] data;
                 line = line.replaceAll(" +", " ");
                 data = line.split(" ");
                 hashAlleles.putIfAbsent(data[1], new LinkedHashMap<>(500));
                 hashAlleles.get(data[1]).putIfAbsent(data[2], null);
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-            for (String p : vcfPath) {
-                GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
-                br = new BufferedReader(new InputStreamReader(gzip));
+        for (String p : vcfPath) {
+            try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
+                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
+                String line;
                 while ((line = br.readLine()) != null) {
                     if (line.startsWith("#"))
                         continue;
 
-                    data = line.split("\t");
-                    //hashAlleles.putIfAbsent(data[0], new LinkedHashMap<>(500));
-                    //hashAlleles.get(data[0]).putIfAbsent(data[1], new String[]{data[2], data[3], data[4]});
+                    String[] data = line.split("\t");
                     hashAlleles.get(data[0]).replace(data[1], new String[]{data[2], data[3], data[4]});
                 }
-                br.close();
-                gzip.close();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
+        }
 
 
-            br = new BufferedReader(new FileReader(path));
-            AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), true);
+        try (AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), true);){
             writer.open();
             writer.append("##fileformat=VCFv4.1\n");
             writer.append("##fileDate=");
@@ -448,26 +444,31 @@ public class FConverter {
             writer.append("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
             int nbrMarkers = 0;
             int count = 1;
-            while ((line = br.readLine()) != null) {
-                line = line.replaceAll(" +", " ");
-                if (line.startsWith("ID"))
-                    continue;
-                if (!line.split(" ")[1].equals(chip) && !chip.equals("0"))
-                    continue;
-                if (nbrMarkers == 0) {
-                    nbrMarkers = line.split(" ")[2].length();
-                    for (int i = 0; i < nbrMarkers; i++) {
-                        buffer.add(new StringBuilder());
+
+            try (BufferedReader br = new BufferedReader(new FileReader(path))){
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.replaceAll(" +", " ");
+                    if (line.startsWith("ID"))
+                        continue;
+                    if (!line.split(" ")[1].equals(chip) && !chip.equals("0"))
+                        continue;
+                    if (nbrMarkers == 0) {
+                        nbrMarkers = line.split(" ")[2].length();
+                        for (int i = 0; i < nbrMarkers; i++) {
+                            buffer.add(new StringBuilder());
+                        }
                     }
+                    cmp = 0;
+                    for (char c : line.split(" ")[2].toCharArray()) {
+                        buffer.get(cmp).append(c);
+                        cmp++;
+                    }
+                    System.out.print("\rReading individual " + count++);
+                    writer.append("\t" + line.split(" ")[0]);
                 }
-                cmp = 0;
-                for (char c : line.split(" ")[2].toCharArray()) {
-                    buffer.get(cmp).append(c);
-                    cmp++;
-                }
-                System.out.print("\rReading individual " + count++);
-                //imputationRes.add(line);
-                writer.append("\t" + line.split(" ")[0]);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
             System.out.println();
             if (buffer.isEmpty()) {
@@ -519,7 +520,6 @@ public class FConverter {
                 StringBuilder sb = new StringBuilder();
 
                 imputationRes = null;
-                System.gc();
                 cmp = 0;
                 hashAlleles.forEach((chr, m) -> m.forEach((pos, d) -> {
                     sb.setLength(0);
@@ -549,34 +549,7 @@ public class FConverter {
                 }));
 
                 System.out.println();
-                //long endTime = System.nanoTime();
-                //System.out.println((endTime - startTime)/1000000000 + "s");
-//                hashAlleles.forEach((chr, m) -> m.forEach((pos, d) -> {
-//                    sb.setLength(0);
-//                    sb.append(chr).append("\t").append(pos).append("\t").append(d[0]).append("\t").append(d[1]).append("\t").append(d[2]).append("\t.\t.\t.\tGT");
-//                        writer.append(sb.toString());
-//                        imputationRes.forEach(l -> {
-//                            //geno = l.split(" ")[2].toCharArray();
-//                            switch (l.split(" ")[2].charAt(cmp)) {
-//                                case '0':
-//                                    writer.append("\t0/0");
-//                                    break;
-//                                case '1':
-//                                    writer.append("\t0/1");
-//                                    break;
-//                                case '2':
-//                                    writer.append("\t1/1");
-//                                    break;
-//                                default:
-//                                    writer.append("\t./.");
-//                                    break;
-//                            }
-//                        });
-//                        writer.append("\n");
-//                    cmp++;
-//                }));
             }
-            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
