@@ -129,7 +129,7 @@ public class FConverter {
             case VCF2FIMPUTE:
                 System.out.println("Converting VCF file to FImpute format ...");
                 if (DEBUG) {
-                    try {
+                    try (AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false)){
                         if (!Files.exists(Paths.get(params.get("vcf")))) {
                             System.out.println("ERROR! : file <" + params.get("vcf") + "> does not exist");
                             System.exit(2);
@@ -139,18 +139,18 @@ public class FConverter {
                             nthr = Integer.parseInt(params.get("nthr"));
                         }
                         System.out.println("Using " + nthr + " threads");
-                        AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false);
                         writer.open();
                         if (header)
                             writer.append("ID\tChip\tCall...\n");
-                        VCFHandler handler = new VCFHandler(getColumnNunber(params.get("vcf")), 0, writer, params.get("vcf"), params.get("chip"));
+                        MemoryTextBuffer textBuffer = new MemoryTextBuffer(params.get("vcf"));
+                        textBuffer.load();
+                        VCFHandler handler = new VCFHandler(getColumnNunber(params.get("vcf")), 0, writer, textBuffer, params.get("chip"));
                         ForkJoinPool pool = new ForkJoinPool(nthr);
 
                         pool.invoke(handler);
                         while (pool.getActiveThreadCount() != 0) {
                             Thread.sleep(1000);
                         }
-                        writer.close();
                     } catch (IOException | InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
