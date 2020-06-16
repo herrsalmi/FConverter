@@ -1,4 +1,5 @@
-
+[![Build Status](https://travis-ci.com/herrsalmi/FConverter.svg?branch=master)](https://github.com/herrsalmi/FConverter/releases/latest)
+[![codecov](https://codecov.io/gh/herrsalmi/FConverter/branch/master/graph/badge.svg)](https://codecov.io/gh/herrsalmi/FConverter)
 # FConverter
 File format converter for FImpute2
 
