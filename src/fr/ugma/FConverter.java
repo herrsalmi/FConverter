@@ -13,14 +13,11 @@ import java.util.zip.GZIPInputStream;
  */
 public class FConverter {
 
-    private static final String VERSION = "0.9";
-    private static final boolean DEBUG = true;
+    private static final String VERSION = "1.0";
     private static final boolean LARGMEM = false;
     private boolean header = false;
     private mode tMode;
     private final HashMap<String, String> params = new HashMap<>();
-    private final HashMap<String, ArrayList<String>> hashGenotype = new HashMap<>(100);
-    private final HashMap<String, Integer> hashIndiv = new HashMap<>(100);
     private final LinkedHashMap<String, SortedSet<Positions>> positionSet = new LinkedHashMap<>();
     private ArrayList<String> imputationRes = new ArrayList<>(100);
     private final ArrayList<StringBuilder> buffer = new ArrayList<>();
@@ -56,7 +53,7 @@ public class FConverter {
                 System.exit(0);
                 break;
             case "vcf2fimpute":
-                if (args.length != 6 && args.length != 5 && args.length != 4 && args.length != 3) {
+                if (args.length != 5 && args.length != 4 && args.length != 3) {
                     System.out.println(errorMsg);
                     System.exit(1);
                 }
@@ -110,7 +107,6 @@ public class FConverter {
         System.out.println("\t\tchip=[integer]      chip number");
         System.out.println("\t\t[-p]                print file header");
         System.out.println("\t\t[nthr=xx]           use xx threads (default=4)");
-        System.out.println("\t\t[ind=[file]]        text file containing individuals to keep, with one individual by line");
 
         System.out.println("\tsnpID");
         System.out.println("\t\thd=[file]           gzip compressed vcf file");
@@ -128,42 +124,32 @@ public class FConverter {
         switch (tMode) {
             case VCF2FIMPUTE:
                 System.out.println("Converting VCF file to FImpute format ...");
-                if (DEBUG) {
-                    try (AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false)){
-                        if (!Files.exists(Paths.get(params.get("vcf")))) {
-                            System.out.println("ERROR! : file <" + params.get("vcf") + "> does not exist");
-                            System.exit(2);
-                        }
-                        int nthr = 4;
-                        if (params.containsKey("nthr")) {
-                            nthr = Integer.parseInt(params.get("nthr"));
-                        }
-                        System.out.println("Using " + nthr + " threads");
-                        writer.open();
-                        if (header)
-                            writer.append("ID\tChip\tCall...\n");
-                        MemoryTextBuffer textBuffer = new MemoryTextBuffer(params.get("vcf"));
-                        textBuffer.load();
-                        VCFHandler handler = new VCFHandler(getColumnNunber(params.get("vcf")), 0, writer, textBuffer, params.get("chip"));
-                        ForkJoinPool pool = new ForkJoinPool(nthr);
-
-                        pool.invoke(handler);
-                        while (pool.getActiveThreadCount() != 0) {
-                            Thread.sleep(1000);
-                        }
-                    } catch (IOException | InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                try (AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false)){
+                    if (!Files.exists(Paths.get(params.get("vcf")))) {
+                        System.out.println("ERROR! : file <" + params.get("vcf") + "> does not exist");
+                        System.exit(2);
                     }
-                    System.out.println("\nDone!");
-                    break;
+                    int nthr = 4;
+                    if (params.containsKey("nthr")) {
+                        nthr = Integer.parseInt(params.get("nthr"));
+                    }
+                    System.out.println("Using " + nthr + " threads");
+                    writer.open();
+                    if (header)
+                        writer.append("ID\tChip\tCall...\n");
+                    MemoryTextBuffer textBuffer = new MemoryTextBuffer(params.get("vcf"));
+                    textBuffer.load();
+                    VCFHandler handler = new VCFHandler(getColumnNunber(params.get("vcf")), 0, writer, textBuffer, params.get("chip"));
+                    ForkJoinPool pool = new ForkJoinPool(nthr);
+
+                    pool.invoke(handler);
+                    while (pool.getActiveThreadCount() != 0) {
+                        Thread.sleep(1000);
+                    }
+                } catch (IOException | InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-                if (params.containsKey("ind"))
-                    extractIndivFromFile(params.get("ind"));
-                else
-                    extractIndivFromVCF(params.get("vcf"));
-                extractGenotype(params.get("vcf"));
-                writeGenotype("genotype_id_c" + params.get("chip") + ".txt", params.get("chip"));
-                System.out.println("Done!");
+                System.out.println("\nDone!");
                 break;
             case SNPID:
                 System.out.println("Creating SNP ID file ...");
@@ -202,128 +188,6 @@ public class FConverter {
             e.printStackTrace();
         }
         return -1;
-    }
-
-    private void extractGenotype(String path) {
-        if (!Files.exists(Paths.get(path))) {
-            System.out.println("ERROR! : file <" + path + "> does not exist");
-            System.exit(2);
-        }
-        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
-            String line;
-            String[] data;
-            double lastPos = 0;
-            while ((line = br.readLine()) != null) {
-                if (line.startsWith("##"))
-                    continue;
-
-                if (line.startsWith("#CHROM")) {
-                    data = line.split("\t");
-                    for (int i = 9; i < data.length; i++) {
-                        if (hashIndiv.containsKey(data[i])) {
-                            hashIndiv.replace(data[i], i);
-                            hashGenotype.put(data[i], new ArrayList<>(10000));
-                        }
-                    }
-                    continue;
-                }
-                data = line.split("\t");
-                if (lastPos == Long.parseLong(data[1]))
-                    continue;
-                for (var entry : hashIndiv.entrySet()) {
-                    hashGenotype.get(entry.getKey()).add(data[entry.getValue()]);
-                }
-                lastPos = Long.parseLong(data[1]);
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void extractIndivFromFile(String path) {
-        if (!Files.exists(Paths.get(path))) {
-            System.out.println("ERROR! : file <" + path + "> does not exist");
-            System.exit(2);
-        }
-        String line;
-        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-            while ((line = br.readLine()) != null) {
-                hashIndiv.put(line, null);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void extractIndivFromVCF(String path) {
-        if (!Files.exists(Paths.get(path))) {
-            System.out.println("ERROR! : file <" + path + "> does not exist");
-            System.exit(2);
-        }
-        String line;
-        String[] data;
-        try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
-            while ((line = br.readLine()) != null) {
-                if (line.startsWith("##"))
-                    continue;
-                if (line.startsWith("#CHROM")) {
-                    data = line.split("\t");
-                    for (int i = 9; i < data.length; i++) {
-                        hashIndiv.put(data[i], null);
-                    }
-                    return;
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void writeGenotype(String path, String chip) {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(path))) {
-            if (header) {
-                bw.write("ID\tChip\tCall...");
-                bw.newLine();
-            }
-
-            hashGenotype.forEach((k, v) -> {
-                try {
-                    bw.write(k + "\t" + chip + "\t");
-                    v.forEach(e -> {
-                        try {
-                            switch (e) {
-                                case "0/0":
-                                    bw.write("0");
-                                    break;
-                                case "0/1":
-                                case "1/0":
-                                    bw.write("1");
-                                    break;
-                                case "1/1":
-                                    bw.write("2");
-                                    break;
-                                default:
-                                    bw.write("5");
-                            }
-                        } catch (IOException ex) {
-                            ex.printStackTrace();
-                        }
-                    });
-                    bw.newLine();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
-
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-
     }
 
     private void makeSnpID(List<String> paths) {
