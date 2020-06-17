@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
 /**
@@ -124,7 +125,7 @@ public class FConverter {
         switch (tMode) {
             case VCF2FIMPUTE:
                 System.out.println("Converting VCF file to FImpute format ...");
-                try (AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false)){
+                try (AsyncFileWriter writer = new AsyncFileWriter(new File("genotype_id_c" + params.get("chip") + ".txt"), false)) {
                     if (!Files.exists(Paths.get(params.get("vcf")))) {
                         System.out.println("ERROR! : file <" + params.get("vcf") + "> does not exist");
                         System.exit(2);
@@ -136,16 +137,15 @@ public class FConverter {
                     System.out.println("Using " + nthr + " threads");
                     writer.open();
                     if (header)
-                        writer.append("ID\tChip\tCall...\n");
+                        writer.append("ID Chip Call...\n");
                     MemoryTextBuffer textBuffer = new MemoryTextBuffer(params.get("vcf"));
                     textBuffer.load();
                     VCFHandler handler = new VCFHandler(getColumnNunber(params.get("vcf")), 0, writer, textBuffer, params.get("chip"));
                     ForkJoinPool pool = new ForkJoinPool(nthr);
 
                     pool.invoke(handler);
-                    while (pool.getActiveThreadCount() != 0) {
-                        Thread.sleep(1000);
-                    }
+                    pool.shutdown();
+                    pool.awaitTermination(6, TimeUnit.HOURS);
                 } catch (IOException | InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -174,7 +174,7 @@ public class FConverter {
 
     private int getColumnNunber(String path) {
         try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(path));
-             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
+             BufferedReader br = new BufferedReader(new InputStreamReader(gzip))) {
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.startsWith("##"))
@@ -197,23 +197,28 @@ public class FConverter {
         });
         for (String p : paths) {
             try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
-                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
+                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))) {
                 String line;
-                String[] data;
+                String[] data = new String[3];
+                int end;
                 long lastPos = 0;
                 while ((line = br.readLine()) != null) {
                     if (line.startsWith("#"))
                         continue;
-                    data = line.split("\t");
+                    int start = 0;
+                    for (int i = 0; i < 3; i++) {
+                        end = line.indexOf('\t', start);
+                        data[i] = line.substring(start, end);
+                        start = end + 1;
+                    }
                     positionSet.putIfAbsent(data[0], Collections.synchronizedSortedSet(new TreeSet<>()));
-                    if (positionSet.get(data[0]).size() != 0 && lastPos == Long.parseLong(data[1])) {
+                    if (!positionSet.get(data[0]).isEmpty() && lastPos == Long.parseLong(data[1])) {
                         continue;
                     }
                     synchronized (this) {
                         positionSet.get(data[0]).add(new Positions(Long.parseLong(data[1]), data[2]));
                         lastPos = Long.parseLong(data[1]);
                     }
-
                 }
                 Positions.incrementChipNumber();
                 Positions.resetCMP();
@@ -222,16 +227,16 @@ public class FConverter {
             }
         }
 
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter("snp_info.txt"))){
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter("snp_info.txt"))) {
             StringBuilder sb = new StringBuilder();
-            bw.write("SNP_ID\tChr\tPos\tChip1");
+            bw.write("SNP_ID Chr Pos Chip1");
             for (int i = 1; i < paths.size(); i++) {
-                bw.write("\tChip" + (i + 1));
+                bw.write(" Chip" + (i + 1));
             }
             bw.newLine();
             positionSet.forEach((k, v) -> v.forEach(e -> {
                 try {
-                    sb.append(e.getRsID().equals(".") ? "M" + ++cmp : e.getRsID()).append("\t").append(k).append("\t").append(e.getPos()).append("\t")
+                    sb.append(e.getRsID().equals(".") ? "M" + ++cmp : e.getRsID()).append(" ").append(k).append(" ").append(e.getPos()).append(" ")
                             .append(e.getChipNPos(1));
                     for (int i = 1; i < paths.size(); i++) {
                         sb.append("\t").append(e.getChipNPos(i + 1));
@@ -266,7 +271,7 @@ public class FConverter {
             }
         }
 
-        try (BufferedReader br = new BufferedReader(new FileReader(snpInfo));){
+        try (BufferedReader br = new BufferedReader(new FileReader(snpInfo))) {
             String line;
             br.readLine();
             while ((line = br.readLine()) != null) {
@@ -282,7 +287,7 @@ public class FConverter {
 
         for (String p : vcfPath) {
             try (GZIPInputStream gzip = new GZIPInputStream(new FileInputStream(p));
-                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))){
+                 BufferedReader br = new BufferedReader(new InputStreamReader(gzip))) {
                 String line;
                 while ((line = br.readLine()) != null) {
                     if (line.startsWith("#"))
@@ -297,7 +302,7 @@ public class FConverter {
         }
 
 
-        try (AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), true);){
+        try (AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), true)) {
             writer.open();
             writer.append("##fileformat=VCFv4.1\n");
             writer.append("##fileDate=");
@@ -309,7 +314,7 @@ public class FConverter {
             int nbrMarkers = 0;
             int count = 1;
 
-            try (BufferedReader br = new BufferedReader(new FileReader(path))){
+            try (BufferedReader br = new BufferedReader(new FileReader(path))) {
                 String line;
                 while ((line = br.readLine()) != null) {
                     line = line.replaceAll(" +", " ");
@@ -382,12 +387,15 @@ public class FConverter {
             /////////////////////// low memory mode
             else {
                 StringBuilder sb = new StringBuilder();
-
                 imputationRes = null;
                 cmp = 0;
+
                 hashAlleles.forEach((chr, m) -> m.forEach((pos, d) -> {
+                    // TODO construct each line in parallel then send them to the writer
+                    ////////////////
                     sb.setLength(0);
-                    sb.append(chr).append("\t").append(pos).append("\t").append(d[0]).append("\t").append(d[1]).append("\t").append(d[2]).append("\t.\t.\t.\tGT");
+                    sb.append(chr).append("\t").append(pos).append("\t").append(d[0])
+                            .append("\t").append(d[1]).append("\t").append(d[2]).append("\t.\t.\t.\tGT");
                     writer.append(sb.toString());
                     buffer.get(0).chars().forEach(e -> {
                         switch (e) {
@@ -408,6 +416,7 @@ public class FConverter {
                     writer.append("\n");
                     buffer.remove(0);
                     cmp++;
+                    ////////////////
                     System.out.format("\rWriting marker %d", cmp);
 
                 }));

@@ -81,7 +81,7 @@ class VCFHandler extends RecursiveAction {
         StringBuilder sb = new StringBuilder();
 
         hashGenotype.forEach((k, v) -> {
-            sb.append(k).append("\t").append(chip).append("\t");
+            sb.append(k).append(" ").append(chip).append(" ");
             v.forEach(e -> {
                 switch (e) {
                     case "0/0":
