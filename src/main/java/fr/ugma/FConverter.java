@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
@@ -17,12 +18,11 @@ public class FConverter {
     private static final String VERSION = "1.0";
     private static final boolean LARGMEM = false;
     private boolean header = false;
-    private mode tMode;
+    private final LinkedHashMap<String, LinkedHashMap<Integer, String[]>> hashAlleles = new LinkedHashMap<>(100);
     private final HashMap<String, String> params = new HashMap<>();
     private final LinkedHashMap<String, SortedSet<Positions>> positionSet = new LinkedHashMap<>();
     private ArrayList<String> imputationRes = new ArrayList<>(100);
-    private final ArrayList<StringBuilder> buffer = new ArrayList<>();
-    private final LinkedHashMap<String, LinkedHashMap<String, String[]>> hashAlleles = new LinkedHashMap<>(100);
+    private Mode tMode;
     private int cmp = 0;
     private char[] geno;
 
@@ -64,7 +64,7 @@ public class FConverter {
                     else
                         header = true;
                 }
-                tMode = mode.VCF2FIMPUTE;
+                tMode = Mode.VCF2FIMPUTE;
                 break;
             case "snpID":
                 if (args.length != 3 && args.length != 2) {
@@ -74,7 +74,7 @@ public class FConverter {
                 for (int i = 1; i < args.length; i++) {
                     params.put(args[i].split("=")[0], args[i].split("=")[1]);
                 }
-                tMode = mode.SNPID;
+                tMode = Mode.SNPID;
                 break;
             case "fimpute2vcf":
                 if (args.length != 6) {
@@ -84,7 +84,7 @@ public class FConverter {
                 for (int i = 1; i < args.length; i++) {
                     params.put(args[i].split("=")[0], args[i].split("=")[1]);
                 }
-                tMode = mode.FIMPUTE2VCF;
+                tMode = Mode.FIMPUTE2VCF;
                 break;
             default:
                 printHelp();
@@ -256,6 +256,7 @@ public class FConverter {
     }
 
     private void FImpute2VCF(String path, String snpInfo, String[] vcfPath, String prefix, String chip) {
+        ArrayList<StringBuilder> buffer = new ArrayList<>();
         if (!Files.exists(Paths.get(path))) {
             System.out.println("ERROR! : file <" + path + "> does not exist");
             System.exit(2);
@@ -279,7 +280,7 @@ public class FConverter {
                 line = line.replaceAll(" +", " ");
                 data = line.split(" ");
                 hashAlleles.putIfAbsent(data[1], new LinkedHashMap<>(500));
-                hashAlleles.get(data[1]).putIfAbsent(data[2], null);
+                hashAlleles.get(data[1]).putIfAbsent(Integer.valueOf(data[2]), null);
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -294,15 +295,14 @@ public class FConverter {
                         continue;
 
                     String[] data = line.split("\t");
-                    hashAlleles.get(data[0]).replace(data[1], new String[]{data[2], data[3], data[4]});
+                    hashAlleles.get(data[0]).replace(Integer.valueOf(data[1]), new String[]{data[2], data[3], data[4]});
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
-
-        try (AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), true)) {
+        CountDownLatch lock = new CountDownLatch(1);
+        try (AsyncFileWriter writer = new AsyncFileWriter(new File(prefix + ".vcf.gz"), lock, true)) {
             writer.open();
             writer.append("##fileformat=VCFv4.1\n");
             writer.append("##fileDate=");
@@ -389,46 +389,30 @@ public class FConverter {
                 StringBuilder sb = new StringBuilder();
                 imputationRes = null;
                 cmp = 0;
-
+                List<Line> lines = new ArrayList<>(buffer.size());
                 hashAlleles.forEach((chr, m) -> m.forEach((pos, d) -> {
-                    // TODO construct each line in parallel then send them to the writer
-                    ////////////////
-                    sb.setLength(0);
-                    sb.append(chr).append("\t").append(pos).append("\t").append(d[0])
-                            .append("\t").append(d[1]).append("\t").append(d[2]).append("\t.\t.\t.\tGT");
-                    writer.append(sb.toString());
-                    buffer.get(0).chars().forEach(e -> {
-                        switch (e) {
-                            case '0':
-                                writer.append("\t0/0");
-                                break;
-                            case '1':
-                                writer.append("\t0/1");
-                                break;
-                            case '2':
-                                writer.append("\t1/1");
-                                break;
-                            default:
-                                writer.append("\t./.");
-                                break;
-                        }
-                    });
-                    writer.append("\n");
+                    lines.add(new Line(chr, pos, d[0], d[1], d[2], buffer.get(0).chars()));
                     buffer.remove(0);
                     cmp++;
-                    ////////////////
-                    System.out.format("\rWriting marker %d", cmp);
-
                 }));
-
-                System.out.println();
+                cmp = 1;
+                lines.forEach(e -> {
+                    writer.append(e.toString());
+                    System.out.format("\rWriting markers into buffer ... %d", cmp++);
+                });
+                System.out.println("\nWriting ...");
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
+        try {
+            lock.await(1, TimeUnit.HOURS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
-    private enum mode {
+    private enum Mode {
         VCF2FIMPUTE, SNPID, FIMPUTE2VCF
     }
 }

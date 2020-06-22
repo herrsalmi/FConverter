@@ -2,6 +2,7 @@ package fr.ugma;
 
 import java.io.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
@@ -14,14 +15,21 @@ class AsyncFileWriter implements Runnable, IFileWriter, AutoCloseable {
     private final BlockingQueue<Item> queue = new LinkedBlockingQueue<>(10000000);
     private volatile boolean started = false;
     private volatile boolean stopped = false;
+    private CountDownLatch lock;
 
     AsyncFileWriter(File file, boolean compressed) throws IOException {
+        lock = new CountDownLatch(1);
         if (compressed) {
             GZIPOutputStream zout = new GZIPOutputStream(new FileOutputStream(file));
             this.out = new BufferedWriter(new OutputStreamWriter(zout));
         } else {
-            this.out = new BufferedWriter(new java.io.FileWriter(file));
+            this.out = new BufferedWriter(new FileWriter(file));
         }
+    }
+
+    AsyncFileWriter(File file, CountDownLatch lock, boolean compressed) throws IOException {
+        this(file, compressed);
+        this.lock = lock;
     }
 
     public void append(CharSequence seq) {
@@ -35,12 +43,12 @@ class AsyncFileWriter implements Runnable, IFileWriter, AutoCloseable {
         }
     }
 
-    void open() {
+    public void open() {
         this.started = true;
         new Thread(this).start();
     }
 
-    boolean isFinished() {
+    public boolean isFinished() {
         return queue.isEmpty();
     }
 
@@ -62,12 +70,17 @@ class AsyncFileWriter implements Runnable, IFileWriter, AutoCloseable {
         }
         try {
             out.close();
+            lock.countDown();
         } catch (IOException ignore) {
         }
     }
 
     public void close() {
         this.stopped = true;
+    }
+
+    public CountDownLatch getLock() {
+        return lock;
     }
 
     private interface Item {

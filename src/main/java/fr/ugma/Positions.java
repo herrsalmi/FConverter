@@ -23,19 +23,19 @@ class Positions implements Comparable<Positions> {
         chipPos.set(Positions.CHIP - 1, ++CMP);
     }
 
-    static void resetCMP() {
+    public static void resetCMP() {
         Positions.CMP = 0;
     }
 
-    static void incrementChipNumber() {
+    public static void incrementChipNumber() {
         Positions.CHIP++;
     }
 
-    static int getChipNumber() {
+    public static int getChipNumber() {
         return Positions.CHIP;
     }
 
-    long getPos() {
+    public long getPos() {
         return pos;
     }
 
@@ -51,7 +51,7 @@ class Positions implements Comparable<Positions> {
         chipPos.set(Positions.CHIP - 1, pos);
     }
 
-    int getChipNPos(int chip) {
+    public int getChipNPos(int chip) {
         try {
             return chipPos.get(chip - 1);
         } catch (IndexOutOfBoundsException e) {
