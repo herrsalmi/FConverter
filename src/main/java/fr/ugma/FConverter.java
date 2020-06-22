@@ -15,7 +15,7 @@ import java.util.zip.GZIPInputStream;
  */
 public class FConverter {
 
-    private static final String VERSION = "1.0";
+    private static final String VERSION = "1.1";
     private static final boolean LARGMEM = false;
     private boolean header = false;
     private final LinkedHashMap<String, LinkedHashMap<Integer, String[]>> hashAlleles = new LinkedHashMap<>(100);
@@ -333,7 +333,7 @@ public class FConverter {
                         buffer.get(cmp).append(c);
                         cmp++;
                     }
-                    System.out.print("\rReading individual " + count++);
+                    System.out.print("\rReading individuals ... " + count++);
                     writer.append("\t" + line.split(" ")[0]);
                 }
             } catch (IOException e) {
@@ -386,7 +386,6 @@ public class FConverter {
             }
             /////////////////////// low memory mode
             else {
-                StringBuilder sb = new StringBuilder();
                 imputationRes = null;
                 cmp = 0;
                 List<Line> lines = new ArrayList<>(buffer.size());
@@ -406,7 +405,10 @@ public class FConverter {
             e.printStackTrace();
         }
         try {
-            lock.await(1, TimeUnit.HOURS);
+            if (!lock.await(1, TimeUnit.HOURS)) {
+                System.err.println("Execution timeout <!>");
+                System.exit(1);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

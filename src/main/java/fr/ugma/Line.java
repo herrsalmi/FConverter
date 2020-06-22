@@ -8,8 +8,8 @@ public class Line {
     private final String chr;
     private final int pos;
     private final String id;
-    private final String ref; // can be a char?
-    private final String alt; // can be a char?
+    private final String ref;
+    private final String alt;
     private final IntStream genotypes;
 
     private final IntFunction<String> mapper;
