@@ -130,7 +130,8 @@ public class FConverter {
                         System.out.println("ERROR! : file <" + params.get("vcf") + "> does not exist");
                         System.exit(2);
                     }
-                    int nthr = 4;
+                    // Using 4 threads as default or max available threads if less than 4
+                    int nthr = Math.min(Runtime.getRuntime().availableProcessors(), 4);
                     if (params.containsKey("nthr")) {
                         nthr = Integer.parseInt(params.get("nthr"));
                     }
