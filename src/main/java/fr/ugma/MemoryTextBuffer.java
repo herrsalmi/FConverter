@@ -12,9 +12,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.zip.GZIPInputStream;
 
-public class MemoryTextBuffer implements Iterable<String>{
-    private List<String> data;
-    private String path;
+public class MemoryTextBuffer implements Iterable<String> {
+    private final List<String> data;
+    private final String path;
 
     public MemoryTextBuffer(String path) {
         this.path = path;
