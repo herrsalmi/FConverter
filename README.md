@@ -4,7 +4,7 @@
 File format converter for FImpute2
 
 ### Running FConverter
-```sh
+```
 usage : FConverter <vcf2fimpute|snpID|fimpute2vcf> [options]
 	help | -h
 		print this help and exit the program
