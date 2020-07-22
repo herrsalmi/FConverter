@@ -25,12 +25,10 @@
 hs_err_pid*
 
 .idea/
-54k.reduced.vcf.gz
 54k.vcf.gz
 build/
 demo.vcf.gz
 genotype_id_c1.txt
 snp_info.txt
 src/main/resources/
-src/test/
 target/

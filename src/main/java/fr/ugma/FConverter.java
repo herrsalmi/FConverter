@@ -400,6 +400,7 @@ public class FConverter {
                     writer.append(e.toString());
                     System.out.format("\rWriting markers into buffer ... %d", cmp++);
                 });
+                System.out.println();
                 System.out.println("\nWriting to disk ...");
             }
         } catch (IOException e) {
